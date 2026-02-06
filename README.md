@@ -26,14 +26,42 @@ Storage choices may include a relational DB, object storage, or a lightweight em
 
 The final submission should include architecture diagram, documentation, and a basic implementation demonstrating the approach. Minimal implementation is sufficient.
 
+**High-Level Design View (1–4)**
+1. Data Ingestion
+- Pluggable adapters read from files, Kafka, or a database query.
+- Each adapter yields records as generators for streaming.
+
+2. Validation, Quality Checks & Transformation
+- A processing stage validates required fields and types.
+- This is the extension point for dedupe, referential checks, and enrichment.
+
+3. Storage Layer
+- A loading stage inserts validated rows into a staging table.
+- The staging table is the source of truth for reporting queries.
+
+4. Reporting Module
+- Reports are generated from SQL queries against the staging table.
+- Output format is selected by report file extension (CSV/XLSX/PDF).
+
 **Overview**
 This repo provides a modular ETL-style pipeline that:
 1. Ingests from file, Kafka, or database.
 2. Validates records with schema and type checks.
-3. Loads to destinations (DB or S3).
-4. Generates a finance report in CSV/XLSX/PDF based on file extension, then uploads to S3.
+3. Loads validated data into a staging table.
+4. Generates a finance report in CSV/XLSX/PDF based on file extension.
 
 The implementation is intentionally lightweight but designed to be extensible via clear interfaces and separation of concerns.
+
+Example CLI (report pipeline):
+```
+python reporting/report_pipeline.py \
+  --name finance_report \
+  --dsn "postgresql://user:pass@host/db" \
+  --db-query "select account, period, amount, currency from finance_source" \
+  --load-table reporting_finance \
+  --report-path /tmp/finance_report.xlsx
+```
+Note: Some arguments (like table access, permissions, and allowed schemas) can be managed at the database level to simplify CLI usage and allow later changes without code edits.
 
 **Architecture Diagram (Logical)**
 ```
@@ -51,7 +79,7 @@ The implementation is intentionally lightweight but designed to be extensible vi
                       v
             +------------------+
             |   Loading        |
-            | DB / S3          |
+            | DB (Staging)     |
             +------------------+
                       |
                       v
@@ -59,9 +87,6 @@ The implementation is intentionally lightweight but designed to be extensible vi
             | Reporting        |
             | CSV/XLSX/PDF     |
             +------------------+
-                      |
-                      v
-                 Upload to S3
 ```
 
 **Design Patterns Used**
@@ -83,9 +108,7 @@ loading/
   db_loading.py           # PostgreSQL loader
 reporting/
   report_writer.py        # Writes CSV/XLSX/PDF based on extension
-  report_pipeline.py      # Report pipeline + S3 upload
-load/
-  load.py                 # General ETL pipeline CLI
+  report_pipeline.py      # Report pipeline (DB -> validate -> load -> report)
 ```
 
 **Key Components**
@@ -98,18 +121,17 @@ load/
   - `ValidationProcessing`: required fields + type checks; logs errors.
 - Loading:
   - `DBLoading`: batch inserts into a table.
-  - `S3Loading`: writes JSONL payload to S3.
 - Reporting:
   - `ReportWriter`: file extension decides report format.
-  - `ReportPipeline`: reads from DB or S3 (or demo) → validation → report → S3 upload.
+  - `ReportPipeline`: reads from DB → validation → load → report generation.
 
 **What’s Implemented vs. Prompt**
 Implemented:
-- Multi-source ingestion (file, Kafka, DB, S3).
+- Multi-source ingestion (file, Kafka, DB).
 - Validation checks (required fields + type checks).
-- Loading to DB or S3.
+- Loading to DB.
 - Report generation CSV/XLSX/PDF (extension-driven).
-- CLI for ETL and report pipelines.
+- CLI for report pipeline.
 
 Not fully implemented (by design, minimal scope):
 - XML/XLSX ingestion and XML/JSON report output.
@@ -119,21 +141,20 @@ Not fully implemented (by design, minimal scope):
 - Raw/processed storage separation (can be added with extra loaders).
 
 **How to Run**
-Report pipeline (demo finance data → S3):
+Report pipeline (DB → validate → load → report):
 ```
 python reporting/report_pipeline.py \
-  --name finance_demo \
-  --source demo \
-  --report-path /tmp/finance_report.xlsx \
-  --s3-bucket my-finance-bucket \
-  --s3-key reports/finance_report.xlsx \
-  --s3-region us-east-1
+  --name finance_report \
+  --dsn "postgresql://user:pass@host/db" \
+  --db-query "select account, period, amount, currency from finance_source" \
+  --load-table reporting_finance \
+  --report-path /tmp/finance_report.xlsx
 ```
 
 **Dependencies**
 - `psycopg` for PostgreSQL
 - `kafka-python` for Kafka
-- `boto3` for S3
+- `boto3` for optional S3 ingestion
 - `openpyxl` for Excel reports
 - `reportlab` for PDF reports
 - `pyarrow` for Parquet ingestion
