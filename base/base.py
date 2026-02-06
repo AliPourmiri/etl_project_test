@@ -50,6 +50,7 @@ class S3SourceConfig:
 class BaseStage:
     cfg: BaseConfig
     logger: logging.Logger = field(init=False)
+    _dbcxn: Optional[object] = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         # Initialize stage logger after dataclass construction.
@@ -90,3 +91,18 @@ class BaseStage:
         except Exception as exc:
             raise RuntimeError("psycopg is required for database connections") from exc
         return psycopg.connect(self.get_dsn())
+
+    @property
+    def dbcxn(self):
+        # Lazily create and reuse a single DB connection per stage.
+        if self._dbcxn is None:
+            self._dbcxn = self.connect_postgres()
+        return self._dbcxn
+
+    def close_dbcxn(self) -> None:
+        # Close the cached DB connection if it exists.
+        if self._dbcxn is not None:
+            try:
+                self._dbcxn.close()
+            finally:
+                self._dbcxn = None

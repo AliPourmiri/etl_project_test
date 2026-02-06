@@ -81,12 +81,11 @@ processing/
   validation_processing.py # Schema/type validation
 loading/
   db_loading.py           # PostgreSQL loader
-  kafka_loading.py        # Kafka producer loader
-  s3_loading.py           # S3 object loader (JSONL)
 reporting/
   report_writer.py        # Writes CSV/XLSX/PDF based on extension
   report_pipeline.py      # Report pipeline + S3 upload
-pipeline.py               # General ETL pipeline CLI
+load/
+  load.py                 # General ETL pipeline CLI
 ```
 
 **Key Components**
@@ -100,14 +99,13 @@ pipeline.py               # General ETL pipeline CLI
 - Loading:
   - `DBLoading`: batch inserts into a table.
   - `S3Loading`: writes JSONL payload to S3.
-  - `KafkaLoading`: produces messages to Kafka (optional).
 - Reporting:
   - `ReportWriter`: file extension decides report format.
-  - `ReportPipeline`: ingestion → validation → report → S3 upload.
+  - `ReportPipeline`: reads from DB or S3 (or demo) → validation → report → S3 upload.
 
 **What’s Implemented vs. Prompt**
 Implemented:
-- Multi-source ingestion (file, Kafka, DB).
+- Multi-source ingestion (file, Kafka, DB, S3).
 - Validation checks (required fields + type checks).
 - Loading to DB or S3.
 - Report generation CSV/XLSX/PDF (extension-driven).
@@ -121,19 +119,6 @@ Not fully implemented (by design, minimal scope):
 - Raw/processed storage separation (can be added with extra loaders).
 
 **How to Run**
-General ETL pipeline:
-```
-python pipeline.py \
-  --name etl_demo \
-  --source file \
-  --file-path /data/input.jsonl \
-  --file-type jsonl \
-  --required-fields id,name \
-  --type-map '{"id":"int","name":"str"}' \
-  --target table \
-  --table public.events
-```
-
 Report pipeline (demo finance data → S3):
 ```
 python reporting/report_pipeline.py \

@@ -51,14 +51,13 @@ class DBLoading(BaseStage):
             batch = []
 
         try:
-            with psycopg.connect(self.get_dsn()) as conn:
-                with conn.cursor() as cur:
-                    for record in records:
-                        batch.append(record)
-                        if len(batch) >= self.cfg.batch_size:
-                            flush(cur)
-                    flush(cur)
-                conn.commit()
+            with self.dbcxn.cursor() as cur:
+                for record in records:
+                    batch.append(record)
+                    if len(batch) >= self.cfg.batch_size:
+                        flush(cur)
+                flush(cur)
+            self.dbcxn.commit()
         except Exception as exc:
             self.logger.error("db_loading_error err=%s ts=%s", exc, self.now_utc())
             raise

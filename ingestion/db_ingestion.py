@@ -34,12 +34,11 @@ class DBIngestion(BaseStage):
             raise RuntimeError("psycopg is required for database ingestion") from exc
 
         try:
-            with psycopg.connect(self.get_dsn()) as conn:
-                with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-                    cur.execute(self.cfg.query)
-                    for row in cur.fetchall():
-                        count += 1
-                        yield dict(row)
+            with self.dbcxn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                cur.execute(self.cfg.query)
+                for row in cur.fetchall():
+                    count += 1
+                    yield dict(row)
         except Exception as exc:
             self.logger.error("db_ingestion_error err=%s ts=%s", exc, self.now_utc())
             raise
