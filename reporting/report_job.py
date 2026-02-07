@@ -12,7 +12,7 @@ import csv
 import os
 import sys
 
-from base import BaseConfig, BaseStage
+from base import BaseConfig, BaseStage, build_parser
 
 
 class CsvReportWriter:
@@ -137,10 +137,7 @@ class ReportJob(BaseStage):
         with open(output_path, "rb") as f:
             s3.put_object(Bucket=self.S3_BUCKET, Key=self._s3_key(output_path), Body=f.read())
 
-    def run(self) -> int:
-        return self.handle()
-
-    def _handle(self) -> int:
+    def handle(self) -> int:
         self.log.info("report_job_start ts=%s", self.now_utc())
         rows = list(self._fetch_rows())
         writer = self._writer()
@@ -151,28 +148,31 @@ class ReportJob(BaseStage):
         return count
 
 
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Standalone report job")
+def add_report_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--report-name", required=True)
     p.add_argument("--output-format", choices=["csv", "excel"], default="csv")
-    return p
 
 
 def _config_from_args(args: argparse.Namespace) -> ReportJobConfig:
     return ReportJobConfig(
-        name="report_job",
+        name=args.name,
+        log_level=args.log_level,
+        dsn=args.dsn,
+        retries=args.retries,
+        retry_delay_seconds=args.retry_delay_seconds,
+        date=args.date,
         report_name=args.report_name,
         output_format=args.output_format,
     )
 
 
 def main() -> int:
-    parser = build_parser()
+    parser = build_parser("Standalone report job", add_report_options)
     args = parser.parse_args()
     try:
         cfg = _config_from_args(args)
         job = ReportJob(cfg)
-        job.run()
+        job.selfrun()
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

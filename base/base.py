@@ -9,8 +9,31 @@ from typing import Optional, Any, Callable, TypeVar
 import logging
 import os
 import time
+import argparse
 
 T = TypeVar("T")
+
+
+def add_base_options(parser: argparse.ArgumentParser) -> None:
+    # Base CLI arguments shared by all stages.
+    parser.add_argument("--name", default="stage")
+    parser.add_argument("--log-level", default="INFO")
+    parser.add_argument("--dsn")
+    parser.add_argument("--retries", type=int, default=0)
+    parser.add_argument("--retry-delay-seconds", type=float, default=1.0)
+    parser.add_argument("--date", help="Optional logical run date (YYYY-MM-DD)")
+
+
+def build_parser(
+    description: Optional[str] = None,
+    add_options: Optional[Callable[[argparse.ArgumentParser], None]] = None,
+) -> argparse.ArgumentParser:
+    # Build an argparse parser and let callers add options.
+    parser = argparse.ArgumentParser(description=description or "Stage CLI")
+    add_base_options(parser)
+    if add_options:
+        add_options(parser)
+    return parser
 
 @dataclass
 class BaseConfig:
@@ -19,12 +42,15 @@ class BaseConfig:
     dsn: Optional[str] = None
     retries: int = 0
     retry_delay_seconds: float = 1.0
+    date: Optional[str] = None
 
 
 @dataclass
 class BaseStage:
     cfg: BaseConfig
     log: logging.Logger = field(init=False)
+    options: dict[str, Any] = field(init=False, default_factory=dict)
+    date: Optional[str] = field(init=False, default=None)
     _shared_dbcxn: Optional[Any] = None
     _shared_dsn: Optional[str] = None
     _default_dsn: Optional[str] = "postgresql://user:pass@localhost:5432/etl_db"
@@ -32,6 +58,8 @@ class BaseStage:
     def __post_init__(self) -> None:
         # Initialize stage logger after dataclass construction.
         self.log = self._build_logger(self.cfg.name, self.cfg.log_level)
+        self.options = vars(self.cfg)
+        self.date = self.cfg.date
 
     @staticmethod
     def _build_logger(name: str, log_level: str) -> logging.Logger:
@@ -53,6 +81,11 @@ class BaseStage:
     def now_utc() -> datetime:
         # Return the current UTC time for consistent event timestamps.
         return datetime.now(timezone.utc)
+
+    def option(self, name: str, default: Optional[Any] = None) -> Any:
+        # Fetch an option value from config using a CLI-style name.
+        key = name.lstrip("-").replace("-", "_")
+        return getattr(self.cfg, key, default)
 
     def get_dsn(self) -> str:
         # Resolve a DSN from config, environment, or default.
@@ -104,12 +137,12 @@ class BaseStage:
         # Set a default DSN for all stages (used when cfg.dsn is not set).
         cls._default_dsn = dsn
 
-    def _handle(self):
-        raise NotImplementedError("Subclasses must implement _handle()")
-
     def handle(self):
+        raise NotImplementedError("Subclasses must implement handle()")
+
+    def selfrun(self):
         # Run the stage with retries when configured.
-        return self._with_retries(self._handle, op_name="handle")
+        return self._with_retries(self.handle, op_name="handle")
 
     def _with_retries(self, fn: Callable[[], T], op_name: str) -> T:
         attempts = max(1, int(self.cfg.retries) + 1)

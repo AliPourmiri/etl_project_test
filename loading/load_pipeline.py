@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional
 import argparse
 import sys
 
-from base import BaseConfig, BaseStage
+from base import BaseConfig, BaseStage, build_parser
 from ingestion import (
     FileIngestion,
     FileIngestionConfig,
@@ -136,10 +136,7 @@ class DBLoadPipeline(BaseStage):
             )
         )
 
-    def run(self) -> int:
-        return self.handle()
-
-    def _handle(self) -> int:
+    def handle(self) -> int:
         # Run ingestion -> validation -> loading and return loaded count.
         if not self.cfg.table:
             raise ValueError("table is required for db loading")
@@ -161,11 +158,7 @@ def _parse_csv_list(value: Optional[str]) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
-def build_parser() -> argparse.ArgumentParser:
-    # Build CLI parser for the DB loading pipeline.
-    p = argparse.ArgumentParser(description="DB Loading pipeline CLI")
-    p.add_argument("--name", default="db_loading_pipeline")
-
+def add_pipeline_options(p: argparse.ArgumentParser) -> None:
     # Ingestion
     p.add_argument("--source", required=True, choices=["file", "kafka"])
     p.add_argument("--file-path")
@@ -180,13 +173,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--table", required=True)
     p.add_argument("--columns", help="Comma-separated list")
     p.add_argument("--batch-size", type=int, default=1000)
-    return p
 
 
 def _config_from_args(args: argparse.Namespace) -> DBLoadPipelineConfig:
     # Build DBLoadPipelineConfig from parsed CLI args.
     return DBLoadPipelineConfig(
         name=args.name,
+        log_level=args.log_level,
+        dsn=args.dsn,
+        retries=args.retries,
+        retry_delay_seconds=args.retry_delay_seconds,
+        date=args.date,
         source=args.source,
         file_path=args.file_path,
         file_type=args.file_type,
@@ -203,12 +200,12 @@ def _config_from_args(args: argparse.Namespace) -> DBLoadPipelineConfig:
 
 def main() -> int:
     # CLI entry point.
-    parser = build_parser()
+    parser = build_parser("DB Loading pipeline CLI", add_pipeline_options)
     args = parser.parse_args()
     try:
         cfg = _config_from_args(args)
         pipeline = DBLoadPipeline(cfg)
-        pipeline.run()
+        pipeline.selfrun()
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
