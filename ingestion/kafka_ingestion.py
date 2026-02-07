@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable
 import json
 
-from base import BaseConfig, BaseStage, KafkaSourceConfig
+from base import BaseConfig, BaseStage
+from ingestion.configs import KafkaSourceConfig
 
 
 @dataclass
@@ -23,8 +24,8 @@ class KafkaIngestion(BaseStage):
         super().__init__(cfg)
         self.cfg = cfg
 
-    def read(self) -> Iterable[Dict[str, Any]]:
-        # Consume messages from Kafka and yield deserialized payloads.
+    def read(self) -> list[Dict[str, Any]]:
+        # Consume messages from Kafka and return a list of payloads.
         if not self.cfg.bootstrap_servers or not self.cfg.topic:
             raise ValueError("bootstrap_servers and topic are required for kafka ingestion")
         try:
@@ -32,7 +33,7 @@ class KafkaIngestion(BaseStage):
         except Exception as exc:
             raise RuntimeError("kafka-python is required for kafka ingestion") from exc
 
-        self.logger.info(
+        self.log.info(
             "kafka_ingestion_start topic=%s bootstrap=%s ts=%s",
             self.cfg.topic,
             self.cfg.bootstrap_servers,
@@ -48,19 +49,19 @@ class KafkaIngestion(BaseStage):
             value_deserializer=self._deserialize,
         )
 
-        count = 0
+        rows: list[Dict[str, Any]] = []
         try:
             for msg in consumer:
-                count += 1
-                yield msg
-                if self.cfg.max_messages is not None and count >= self.cfg.max_messages:
+                rows.append(msg)
+                if self.cfg.max_messages is not None and len(rows) >= self.cfg.max_messages:
                     break
         except Exception as exc:
-            self.logger.error("kafka_ingestion_error err=%s ts=%s", exc, self.now_utc())
+            self.log.error("kafka_ingestion_error err=%s ts=%s", exc, self.now_utc())
             raise
         finally:
             consumer.close()
-            self.logger.info("kafka_ingestion_end rows=%s ts=%s", count, self.now_utc())
+            self.log.info("kafka_ingestion_end rows=%s ts=%s", len(rows), self.now_utc())
+        return rows
 
     def _deserialize(self, payload: bytes) -> Dict[str, Any]:
         # Decode JSON if possible; otherwise return raw payload text.

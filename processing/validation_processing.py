@@ -1,64 +1,77 @@
 """
-Validation processing stage using BaseStage.
-Validates records from any source and yields only valid rows.
+Simple validation stage using BaseStage.
+Includes schema validation, data quality checks, and basic transformations.
 """
+from typing import Any, Dict, Tuple, Type
+import json
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Type
-
-from base import BaseConfig, BaseStage
-
-
-@dataclass
-class ValidationProcessingConfig(BaseConfig):
-    required_fields: List[str] = field(default_factory=list)
-    type_map: Mapping[str, Type[Any]] = field(default_factory=dict)
-    allow_extra_fields: bool = True
-    max_errors: Optional[int] = None
-
+from base import BaseStage
 
 class ValidationProcessing(BaseStage):
-    def __init__(self, cfg: ValidationProcessingConfig) -> None:
-        # Initialize the base stage and store validation config.
-        super().__init__(cfg)
-        self.cfg = cfg
+    # Fixed schema and types for simplicity.
+    REQUIRED_FIELDS = ["id", "amount", "currency"]
+    TYPE_MAP: Dict[str, Type[Any]] = {"id": int, "amount": float, "currency": str}
+    MAX_ERRORS = 5
+    # Simple referential set for demonstration.
+    VALID_CURRENCIES = {"USD", "EUR", "GBP"}
 
-    def validate(self, records: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
-        # Validate records and yield only those that pass.
-        self.logger.info("validation_start ts=%s", self.now_utc())
+    def validate(self, records: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+        # Validate a list of records, apply transformations, and return valid rows.
+        self.log.info("validation_start ts=%s", self.now_utc())
         error_count = 0
-        valid_count = 0
+        valid_rows: list[Dict[str, Any]] = []
+        seen_ids: set[Any] = set()
+        seen_records: set[str] = set()
         try:
             for record in records:
-                ok, reason = self._is_valid(record)
+                ok, reason = self._is_valid(record, seen_ids, seen_records)
                 if ok:
-                    valid_count += 1
-                    yield record
+                    transformed = self._transform(record)
+                    valid_rows.append(transformed)
                 else:
                     error_count += 1
-                    self.logger.error("validation_error reason=%s record=%s", reason, record)
-                    if self.cfg.max_errors is not None and error_count >= self.cfg.max_errors:
+                    self.log.error("validation_error reason=%s record=%s", reason, record)
+                    if error_count >= self.MAX_ERRORS:
                         raise ValueError("Max validation errors reached")
         finally:
-            self.logger.info(
+            self.log.info(
                 "validation_end valid=%s errors=%s ts=%s",
-                valid_count,
+                len(valid_rows),
                 error_count,
                 self.now_utc(),
             )
+        return valid_rows
 
-    def _is_valid(self, record: Dict[str, Any]) -> Tuple[bool, str]:
-        # Apply required field and type checks to a single record.
-        for field in self.cfg.required_fields:
+    def _is_valid(
+        self,
+        record: Dict[str, Any],
+        seen_ids: set[Any],
+        seen_records: set[str],
+    ) -> Tuple[bool, str]:
+        # Apply required field, type checks, duplicates, missing values, and referential checks.
+        for field in self.REQUIRED_FIELDS:
             if field not in record:
                 return False, f"missing_field:{field}"
-        for field, typ in self.cfg.type_map.items():
+            if record[field] in (None, "", []):
+                return False, f"missing_value:{field}"
+        for field, typ in self.TYPE_MAP.items():
             if field in record and record[field] is not None and not isinstance(record[field], typ):
                 return False, f"type_mismatch:{field}"
-        if not self.cfg.allow_extra_fields:
-            for key in record.keys():
-                if key not in self.cfg.required_fields and key not in self.cfg.type_map:
-                    return False, f"extra_field:{key}"
+        rec_fingerprint = json.dumps(record, sort_keys=True, default=str)
+        if rec_fingerprint in seen_records:
+            return False, "duplicate:record"
+        seen_records.add(rec_fingerprint)
+        if record.get("id") in seen_ids:
+            return False, "duplicate:id"
+        seen_ids.add(record.get("id"))
+        if record.get("currency") not in self.VALID_CURRENCIES:
+            return False, "referential:currency"
         return True, "ok"
+
+    def _transform(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        # Basic normalization and enrichment.
+        out = dict(record)
+        out["currency"] = str(out.get("currency", "")).upper()
+        out["amount"] = float(out.get("amount", 0.0))
+        out["amount_usd"] = out["amount"]  # placeholder for FX conversion
+        return out

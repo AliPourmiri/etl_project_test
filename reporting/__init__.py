@@ -1,3 +1,3 @@
-from .report_pipeline import ReportPipeline, ReportPipelineConfig
+from .report_job import ReportJob, ReportJobConfig
 
-__all__ = ["ReportPipeline", "ReportPipelineConfig"]
+__all__ = ["ReportJob", "ReportJobConfig"]

@@ -10,7 +10,8 @@ from typing import Any, Dict, Iterable
 import json
 import os
 
-from base import BaseConfig, BaseStage, S3SourceConfig
+from base import BaseConfig, BaseStage
+from ingestion.configs import S3SourceConfig
 
 
 @dataclass
@@ -24,8 +25,8 @@ class S3Ingestion(BaseStage):
         super().__init__(cfg)
         self.cfg = cfg
 
-    def read(self) -> Iterable[Dict[str, Any]]:
-        # Read JSON or JSON Lines from S3 and yield records.
+    def read(self) -> list[Dict[str, Any]]:
+        # Read JSON or JSON Lines from S3 into a list of records.
         if not self.cfg.bucket or not self.cfg.key:
             raise ValueError("bucket and key are required for s3 ingestion")
         try:
@@ -33,13 +34,13 @@ class S3Ingestion(BaseStage):
         except Exception as exc:
             raise RuntimeError("boto3 is required for s3 ingestion") from exc
 
-        self.logger.info(
+        self.log.info(
             "s3_ingestion_start bucket=%s key=%s ts=%s",
             self.cfg.bucket,
             self.cfg.key,
             self.now_utc(),
         )
-        count = 0
+        rows: list[Dict[str, Any]] = []
         try:
             s3 = boto3.client("s3", region_name=self.cfg.region)
             obj = s3.get_object(Bucket=self.cfg.bucket, Key=self.cfg.key)
@@ -50,23 +51,20 @@ class S3Ingestion(BaseStage):
                     line = line.strip()
                     if not line:
                         continue
-                    count += 1
-                    yield json.loads(line)
+                    rows.append(json.loads(line))
             elif ext == ".json":
                 data = json.loads(body.decode("utf-8"))
                 if isinstance(data, list):
-                    for item in data:
-                        count += 1
-                        yield item
+                    rows.extend(data)
                 elif isinstance(data, dict):
-                    count += 1
-                    yield data
+                    rows.append(data)
                 else:
                     raise ValueError("JSON must be an object or array of objects")
             else:
                 raise ValueError(f"Unsupported S3 object extension: {ext}")
         except Exception as exc:
-            self.logger.error("s3_ingestion_error err=%s ts=%s", exc, self.now_utc())
+            self.log.error("s3_ingestion_error err=%s ts=%s", exc, self.now_utc())
             raise
         finally:
-            self.logger.info("s3_ingestion_end rows=%s ts=%s", count, self.now_utc())
+            self.log.info("s3_ingestion_end rows=%s ts=%s", len(rows), self.now_utc())
+        return rows

@@ -28,8 +28,8 @@ The final submission should include architecture diagram, documentation, and a b
 
 **High-Level Design View (1–4)**
 1. Data Ingestion
-- Pluggable adapters read from files, Kafka, or a database query.
-- Each adapter yields records as generators for streaming.
+- Pluggable adapters read from files or Kafka (prototype scope).
+- Each adapter returns a list of dictionaries.
 
 2. Validation, Quality Checks & Transformation
 - A processing stage validates required fields and types.
@@ -40,34 +40,32 @@ The final submission should include architecture diagram, documentation, and a b
 - The staging table is the source of truth for reporting queries.
 
 4. Reporting Module
-- Reports are generated from SQL queries against the staging table.
-- Output format is selected by report file extension (CSV/XLSX/PDF).
+- Reports are generated from SQL queries against a predefined table.
+- Output format is selected by job settings (CSV or Excel). XML is not generated in this prototype.
 
 **Overview**
 This repo provides a modular ETL-style pipeline that:
-1. Ingests from file, Kafka, or database.
-2. Validates records with schema and type checks.
+1. Ingests from file or Kafka.
+2. Validates records with schema checks, data quality checks, and basic transformations.
 3. Loads validated data into a staging table.
-4. Generates a finance report in CSV/XLSX/PDF based on file extension.
+4. Generates a finance report in CSV/XLSX based on the report job settings.
 
 The implementation is intentionally lightweight but designed to be extensible via clear interfaces and separation of concerns.
 
-Example CLI (report pipeline):
+Example CLI (report job):
 ```
-python reporting/report_pipeline.py \
-  --name finance_report \
-  --dsn "postgresql://user:pass@host/db" \
-  --db-query "select account, period, amount, currency from finance_source" \
-  --load-table reporting_finance \
-  --report-path /tmp/finance_report.xlsx
+python reporting/report_job.py \
+  --report-name finance_report \
+  --output-format excel
 ```
 Note: Some arguments (like table access, permissions, and allowed schemas) can be managed at the database level to simplify CLI usage and allow later changes without code edits.
+Note: In this design we use CLI arguments to choose the ingestion type. An alternative is to define resource tables in the database and read ingestion settings from those tables instead of passing arguments.
 
 **Architecture Diagram (Logical)**
 ```
             +------------------+
             |   Ingestion      |
-            | File / DB / Kafka|
+            | File / Kafka     |
             +---------+--------+
                       |
                       v
@@ -85,7 +83,7 @@ Note: Some arguments (like table access, permissions, and allowed schemas) can b
                       v
             +------------------+
             | Reporting        |
-            | CSV/XLSX/PDF     |
+            | CSV/XLSX         |
             +------------------+
 ```
 
@@ -99,39 +97,39 @@ Note: Some arguments (like table access, permissions, and allowed schemas) can b
 base/
   base.py                 # BaseStage with logging, timestamps, DB connection
 ingestion/
-  file_ingestion.py       # CSV/JSON/JSONL/Parquet ingestion
+  file_ingestion.py       # CSV/JSON/JSONL ingestion
   kafka_ingestion.py      # Kafka consumer ingestion
-  db_ingestion.py         # PostgreSQL ingestion
+  s3_ingestion.py         # S3 JSON/JSONL ingestion
 processing/
   validation_processing.py # Schema/type validation
 loading/
-  db_loading.py           # PostgreSQL loader
+  load_pipeline.py        # DB loader + CLI pipeline
 reporting/
-  report_writer.py        # Writes CSV/XLSX/PDF based on extension
-  report_pipeline.py      # Report pipeline (DB -> validate -> load -> report)
+  report_job.py           # Standalone report job (DB -> report -> S3)
+dags/
+  etl_report_dag.py       # Airflow DAG to run load -> report
 ```
 
 **Key Components**
 - `BaseStage` (`base/base.py`): shared logger, UTC timestamps, default DB connection.
 - Ingestion:
-  - `FileIngestion`: CSV, JSON, JSONL/NDJSON, Parquet (streamed).
+  - `FileIngestion`: CSV, JSON, JSONL/NDJSON.
   - `KafkaIngestion`: Kafka consumer.
-  - `DBIngestion`: PostgreSQL query reader.
+  - `S3Ingestion`: JSON/JSONL reader from S3.
 - Processing:
-  - `ValidationProcessing`: required fields + type checks; logs errors.
+  - `ValidationProcessing`: schema checks, data quality checks, and transformations.
 - Loading:
   - `DBLoading`: batch inserts into a table.
 - Reporting:
-  - `ReportWriter`: file extension decides report format.
-  - `ReportPipeline`: reads from DB → validation → load → report generation.
+  - `ReportJob`: reads from DB → report generation → S3 upload.
 
 **What’s Implemented vs. Prompt**
 Implemented:
-- Multi-source ingestion (file, Kafka, DB).
-- Validation checks (required fields + type checks).
+- Multi-source ingestion (file, Kafka).
+- Validation checks (schema, duplicates, missing values, referential checks).
 - Loading to DB.
-- Report generation CSV/XLSX/PDF (extension-driven).
-- CLI for report pipeline.
+- Report generation CSV/XLSX.
+- CLI for report job.
 
 Not fully implemented (by design, minimal scope):
 - XML/XLSX ingestion and XML/JSON report output.
@@ -141,29 +139,64 @@ Not fully implemented (by design, minimal scope):
 - Raw/processed storage separation (can be added with extra loaders).
 
 **How to Run**
-Report pipeline (DB → validate → load → report):
+Report job (DB → report → S3):
 ```
-python reporting/report_pipeline.py \
-  --name finance_report \
-  --dsn "postgresql://user:pass@host/db" \
-  --db-query "select account, period, amount, currency from finance_source" \
-  --load-table reporting_finance \
-  --report-path /tmp/finance_report.xlsx
+python reporting/report_job.py \
+  --report-name finance_report \
+  --output-format excel
 ```
+
+**Scheduling (Cron and Airflow)**
+Dependency: run the load pipeline first, then run the report job.
+
+Cron example (Linux):
+```
+# Load at 01:00, then report at 01:15
+0 1 * * * /usr/bin/python /path/to/etl_project/loading/load_pipeline.py --source file --file-path /data/input.jsonl --file-type jsonl --table reporting_finance
+15 1 * * * /usr/bin/python /path/to/etl_project/reporting/report_job.py --report-name finance_report --output-format excel
+```
+
+Airflow example (simple DAG with dependency):
+```
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from datetime import datetime
+
+with DAG("etl_report", start_date=datetime(2024, 1, 1), schedule="@daily", catchup=False) as dag:
+    load_task = BashOperator(
+        task_id="load",
+        bash_command=(
+            "python /path/to/etl_project/loading/load_pipeline.py "
+            "--source file --file-path /data/input.jsonl --file-type jsonl "
+            "--table reporting_finance"
+        ),
+    )
+    report_task = BashOperator(
+        task_id="report",
+        bash_command=(
+            "python /path/to/etl_project/reporting/report_job.py "
+            "--report-name finance_report --output-format excel"
+        ),
+    )
+
+    load_task >> report_task
+```
+
+**Airflow DAG File**
+The project includes a ready-to-use Airflow DAG at `dags/etl_report_dag.py`.
+You can copy this file into your Airflow `dags/` folder and adjust paths as needed.
 
 **Dependencies**
 - `psycopg` for PostgreSQL
 - `kafka-python` for Kafka
-- `boto3` for optional S3 ingestion
+- `boto3` for S3 upload
 - `openpyxl` for Excel reports
-- `reportlab` for PDF reports
-- `pyarrow` for Parquet ingestion
 
 **Extending the System**
 - Add new ingestion source: implement a new class with a `read()` generator.
 - Add new validation rules: extend `ValidationProcessing._is_valid`.
 - Add new destination: implement a `load()` class under `loading/`.
-- Add new report format: extend `ReportWriter`.
+- Add new report format: extend `reporting/report_job.py` writers.
 
 **Notes**
 The implementation emphasizes clarity and extensibility. All stages use `BaseStage` for consistent logging, timestamps, and DB connectivity.

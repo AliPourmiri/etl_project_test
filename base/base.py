@@ -3,11 +3,9 @@ Base class for ETL stages (ingestion, processing, loading).
 Provides logging, timestamps, and default database connection helpers.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any
 import logging
 import os
 
@@ -20,41 +18,16 @@ class BaseConfig:
 
 
 @dataclass
-class FileSourceConfig:
-    path: str = ""
-    file_type: Optional[str] = None  # csv, json, jsonl, ndjson, parquet
-
-
-@dataclass
-class KafkaSourceConfig:
-    bootstrap_servers: str = ""
-    topic: str = ""
-    group_id: str = "ingestion-consumer"
-    auto_offset_reset: str = "earliest"
-    max_messages: Optional[int] = 100
-
-
-@dataclass
-class DBQueryConfig:
-    query: str = ""
-
-
-@dataclass
-class S3SourceConfig:
-    bucket: str = ""
-    key: str = ""
-    region: Optional[str] = None
-
-
-@dataclass
 class BaseStage:
     cfg: BaseConfig
-    logger: logging.Logger = field(init=False)
-    _dbcxn: Optional[object] = field(init=False, default=None)
+    log: logging.Logger = field(init=False)
+    _shared_dbcxn: Optional[Any] = None
+    _shared_dsn: Optional[str] = None
+    _default_dsn: Optional[str] = "postgresql://user:pass@localhost:5432/etl_db"
 
     def __post_init__(self) -> None:
         # Initialize stage logger after dataclass construction.
-        self.logger = self._build_logger(self.cfg.name, self.cfg.log_level)
+        self.log = self._build_logger(self.cfg.name, self.cfg.log_level)
 
     @staticmethod
     def _build_logger(name: str, log_level: str) -> logging.Logger:
@@ -78,10 +51,10 @@ class BaseStage:
         return datetime.now(timezone.utc)
 
     def get_dsn(self) -> str:
-        # Resolve a DSN from config or environment for DB connections.
-        dsn = self.cfg.dsn or os.environ.get("DATABASE_DSN")
+        # Resolve a DSN from config, environment, or default.
+        dsn = self.cfg.dsn or os.environ.get("DATABASE_DSN") or BaseStage._default_dsn
         if not dsn:
-            raise ValueError("No DSN provided (cfg.dsn or DATABASE_DSN)")
+            raise ValueError("No DSN provided (cfg.dsn, DATABASE_DSN, or default DSN)")
         return dsn
 
     def connect_postgres(self):
@@ -94,15 +67,35 @@ class BaseStage:
 
     @property
     def dbcxn(self):
-        # Lazily create and reuse a single DB connection per stage.
-        if self._dbcxn is None:
-            self._dbcxn = self.connect_postgres()
-        return self._dbcxn
+        # Lazily create and reuse a single DB connection across all stages.
+        dsn = self.get_dsn()
+        if BaseStage._shared_dbcxn is None or BaseStage._shared_dsn != dsn:
+            BaseStage._shared_dbcxn = self.connect_postgres()
+            BaseStage._shared_dsn = dsn
+        return BaseStage._shared_dbcxn
+
+    @property
+    def dbCxn(self):
+        return self.dbcxn
+
+    def db_cursor(self):
+        # Default cursor with dict rows when psycopg is available.
+        try:
+            import psycopg  # type: ignore
+        except Exception:
+            return self.dbcxn.cursor()
+        return self.dbcxn.cursor(row_factory=psycopg.rows.dict_row)
 
     def close_dbcxn(self) -> None:
-        # Close the cached DB connection if it exists.
-        if self._dbcxn is not None:
+        # Close the shared DB connection if it exists.
+        if BaseStage._shared_dbcxn is not None:
             try:
-                self._dbcxn.close()
+                BaseStage._shared_dbcxn.close()
             finally:
-                self._dbcxn = None
+                BaseStage._shared_dbcxn = None
+                BaseStage._shared_dsn = None
+
+    @classmethod
+    def set_default_dsn(cls, dsn: Optional[str]) -> None:
+        # Set a default DSN for all stages (used when cfg.dsn is not set).
+        cls._default_dsn = dsn
