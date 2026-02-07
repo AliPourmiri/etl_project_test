@@ -1,5 +1,5 @@
 """
-Database loading stage using BaseStage (PostgreSQL via psycopg).
+Database loading stage using ETlBase (PostgreSQL via psycopg).
 Inserts rows into a table.
 Includes a CLI that runs ingestion -> validation -> load.
 """
@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional
 import argparse
 import sys
 
-from base import BaseConfig, BaseStage, build_parser
+from base import BaseConfig, ETlBase, build_parser
 from ingestion import (
     FileIngestion,
     FileIngestionConfig,
@@ -28,7 +28,7 @@ class DBLoadingConfig(BaseConfig):
     batch_size: int = 1000
 
 
-class DBLoading(BaseStage):
+class DBLoading(ETlBase):
     def __init__(self, cfg: DBLoadingConfig) -> None:
         # Initialize the base stage and store DB loading config.
         super().__init__(cfg)
@@ -92,7 +92,7 @@ class DBLoadPipelineConfig(BaseConfig):
     batch_size: int = 1000
 
 
-class DBLoadPipeline(BaseStage):
+class DBLoadPipeline(ETlBase):
     def __init__(self, cfg: DBLoadPipelineConfig) -> None:
         # Initialize base stage and store pipeline config.
         super().__init__(cfg)

@@ -1,5 +1,5 @@
 """
-Kafka ingestion stage using BaseStage.
+Kafka ingestion stage using ETlBase.
 Consumes messages and yields deserialized payloads.
 """
 
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable
 import json
 
-from base import BaseConfig, BaseStage
+from base import BaseConfig, ETlBase
 from ingestion.configs import KafkaSourceConfig
 
 
@@ -18,7 +18,7 @@ class KafkaIngestionConfig(BaseConfig, KafkaSourceConfig):
     pass
 
 
-class KafkaIngestion(BaseStage):
+class KafkaIngestion(ETlBase):
     def __init__(self, cfg: KafkaIngestionConfig) -> None:
         # Initialize the base stage and store Kafka config.
         super().__init__(cfg)

@@ -1,5 +1,5 @@
 """
-S3 ingestion stage using BaseStage.
+S3 ingestion stage using ETlBase.
 Reads JSON or JSON Lines objects from S3.
 """
 
@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable
 import json
 import os
 
-from base import BaseConfig, BaseStage
+from base import BaseConfig, ETlBase
 from ingestion.configs import S3SourceConfig
 
 
@@ -19,7 +19,7 @@ class S3IngestionConfig(BaseConfig, S3SourceConfig):
     pass
 
 
-class S3Ingestion(BaseStage):
+class S3Ingestion(ETlBase):
     def __init__(self, cfg: S3IngestionConfig) -> None:
         # Initialize the base stage and store S3 config.
         super().__init__(cfg)

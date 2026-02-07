@@ -12,7 +12,7 @@ import csv
 import os
 import sys
 
-from base import BaseConfig, BaseStage, build_parser
+from base import BaseConfig, ETlBase, build_parser
 
 
 class CsvReportWriter:
@@ -86,7 +86,7 @@ class ReportJobConfig(BaseConfig):
     output_format: str = "csv"  # csv | excel
 
 
-class ReportJob(BaseStage):
+class ReportJob(ETlBase):
     # Fixed report inputs (not CLI args)
     TABLE = "reporting_finance"
     QUERY = "select * from reporting_finance"

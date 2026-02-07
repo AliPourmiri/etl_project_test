@@ -1,5 +1,5 @@
 """
-File ingestion stage using BaseStage.
+File ingestion stage using ETlBase.
 Supported: CSV, JSON, JSON Lines (jsonl/ndjson).
 """
 
@@ -11,7 +11,7 @@ import csv
 import json
 import os
 
-from base import BaseConfig, BaseStage
+from base import BaseConfig, ETlBase
 from ingestion.configs import FileSourceConfig
 
 
@@ -20,7 +20,7 @@ class FileIngestionConfig(BaseConfig, FileSourceConfig):
     pass
 
 
-class FileIngestion(BaseStage):
+class FileIngestion(ETlBase):
     def __init__(self, cfg: FileIngestionConfig) -> None:
         # Initialize the base stage and store file config.
         super().__init__(cfg)

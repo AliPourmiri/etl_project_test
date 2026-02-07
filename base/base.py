@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional, Any, Callable, TypeVar
 import logging
 import os
+import re
 import time
 import argparse
 
@@ -54,6 +55,7 @@ class BaseStage:
     _shared_dbcxn: Optional[Any] = None
     _shared_dsn: Optional[str] = None
     _default_dsn: Optional[str] = "postgresql://user:pass@localhost:5432/etl_db"
+    _resource_table: str = "resource"
 
     def __post_init__(self) -> None:
         # Initialize stage logger after dataclass construction.
@@ -123,6 +125,35 @@ class BaseStage:
             return self.dbcxn.cursor()
         return self.dbcxn.cursor(row_factory=psycopg.rows.dict_row)
 
+    @staticmethod
+    def _validate_identifier(name: str) -> None:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise ValueError(f"Invalid identifier: {name}")
+
+    @staticmethod
+    def _row_to_dict(row: Any, cursor: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        if isinstance(row, dict):
+            return row
+        if hasattr(row, "_asdict"):
+            return row._asdict()
+        if getattr(cursor, "description", None):
+            return {desc[0]: row[idx] for idx, desc in enumerate(cursor.description)}
+        return dict(row)
+
+    def resource_config(self, job_name: Optional[str] = None, table: Optional[str] = None) -> dict[str, Any]:
+        # Fetch resource configuration for a job from a predefined table.
+        name = job_name or self.cfg.name
+        table_name = table or os.environ.get("RESOURCE_TABLE") or self._resource_table
+        self._validate_identifier(table_name)
+        with self.db_cursor() as cur:
+            cur.execute(f"select * from {table_name} where job_name = %s", (name,))
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError(f"No resource config found for job_name={name} in {table_name}")
+            return self._row_to_dict(row, cur)
+
     def close_dbcxn(self) -> None:
         # Close the shared DB connection if it exists.
         if BaseStage._shared_dbcxn is not None:
@@ -171,3 +202,12 @@ class BaseStage:
                 )
                 if delay:
                     time.sleep(delay)
+
+
+class ETlBase(BaseStage):
+    """
+    Preferred base class name for all ETL stages.
+    Kept as a thin alias of BaseStage for compatibility.
+    """
+
+    pass

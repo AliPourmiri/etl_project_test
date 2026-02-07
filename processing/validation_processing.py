@@ -1,13 +1,13 @@
 """
-Simple validation stage using BaseStage.
+Simple validation stage using ETlBase.
 Includes schema validation, data quality checks, and basic transformations.
 """
 from typing import Any, Dict, Tuple, Type
 import json
 
-from base import BaseStage
+from base import ETlBase
 
-class ValidationProcessing(BaseStage):
+class ValidationProcessing(ETlBase):
     # Fixed schema and types for simplicity.
     REQUIRED_FIELDS = ["id", "amount", "currency"]
     TYPE_MAP: Dict[str, Type[Any]] = {"id": int, "amount": float, "currency": str}
