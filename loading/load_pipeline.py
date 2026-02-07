@@ -137,6 +137,9 @@ class DBLoadPipeline(BaseStage):
         )
 
     def run(self) -> int:
+        return self.handle()
+
+    def _handle(self) -> int:
         # Run ingestion -> validation -> loading and return loaded count.
         if not self.cfg.table:
             raise ValueError("table is required for db loading")

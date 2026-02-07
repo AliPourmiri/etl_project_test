@@ -5,16 +5,20 @@ Provides logging, timestamps, and default database connection helpers.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional, Any, Callable, TypeVar
 import logging
 import os
+import time
 
+T = TypeVar("T")
 
 @dataclass
 class BaseConfig:
     name: str
     log_level: str = "INFO"
     dsn: Optional[str] = None
+    retries: int = 0
+    retry_delay_seconds: float = 1.0
 
 
 @dataclass
@@ -99,3 +103,38 @@ class BaseStage:
     def set_default_dsn(cls, dsn: Optional[str]) -> None:
         # Set a default DSN for all stages (used when cfg.dsn is not set).
         cls._default_dsn = dsn
+
+    def _handle(self):
+        raise NotImplementedError("Subclasses must implement _handle()")
+
+    def handle(self):
+        # Run the stage with retries when configured.
+        return self._with_retries(self._handle, op_name="handle")
+
+    def _with_retries(self, fn: Callable[[], T], op_name: str) -> T:
+        attempts = max(1, int(self.cfg.retries) + 1)
+        delay = max(0.0, float(self.cfg.retry_delay_seconds))
+        for attempt in range(1, attempts + 1):
+            try:
+                return fn()
+            except Exception as exc:
+                if attempt >= attempts:
+                    self.log.error(
+                        "%s_failed attempts=%s err=%s ts=%s",
+                        op_name,
+                        attempt,
+                        exc,
+                        self.now_utc(),
+                    )
+                    raise
+                self.log.warning(
+                    "%s_retry attempt=%s/%s err=%s sleep=%ss ts=%s",
+                    op_name,
+                    attempt,
+                    attempts,
+                    exc,
+                    delay,
+                    self.now_utc(),
+                )
+                if delay:
+                    time.sleep(delay)

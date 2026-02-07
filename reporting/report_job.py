@@ -138,6 +138,9 @@ class ReportJob(BaseStage):
             s3.put_object(Bucket=self.S3_BUCKET, Key=self._s3_key(output_path), Body=f.read())
 
     def run(self) -> int:
+        return self.handle()
+
+    def _handle(self) -> int:
         self.log.info("report_job_start ts=%s", self.now_utc())
         rows = list(self._fetch_rows())
         writer = self._writer()
