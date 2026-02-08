@@ -1,5 +1,5 @@
 """
-File ingestion stage using ETlBase.
+File ingestion stage using BaseStage.
 Supported: CSV, JSON, JSON Lines (jsonl/ndjson).
 """
 
@@ -10,8 +10,9 @@ from typing import Any, Dict, Iterable
 import csv
 import json
 import os
+import logging
 
-from base import BaseConfig, ETlBase
+from base import BaseConfig, ETLBase
 from ingestion.configs import FileSourceConfig
 
 
@@ -20,13 +21,14 @@ class FileIngestionConfig(BaseConfig, FileSourceConfig):
     pass
 
 
-class FileIngestion(ETlBase):
-    def __init__(self, cfg: FileIngestionConfig) -> None:
-        # Initialize the base stage and store file config.
-        super().__init__(cfg)
+class FileIngestion:
+    
+    def __init__(self, cfg: FileIngestionConfig, log=logging.getLogger("FileIngestion")) -> None:
+        
         self.cfg = cfg
-
-    def _detect_type(self) -> str:
+        self.log = log
+    
+    def _detect_type(self, cfg: FileIngestionConfig) -> str:
         # Infer file type from config or file extension.
         if self.cfg.file_type:
             return self.cfg.file_type.lower()
@@ -62,15 +64,6 @@ class FileIngestion(ETlBase):
             reader = csv.DictReader(f)
             for row in reader:
                 yield dict(row)
-
-    def _read_json_lines(self) -> Iterable[Dict[str, Any]]:
-        # Yield rows from a JSON Lines (one JSON object per line) file.
-        with open(self.cfg.path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                yield json.loads(line)
 
     def _read_json(self) -> Iterable[Dict[str, Any]]:
         # Yield rows from a JSON file (list of objects or single object).

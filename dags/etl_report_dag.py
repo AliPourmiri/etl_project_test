@@ -13,7 +13,7 @@ DEFAULT_ARGS = {
 
 with DAG(
     dag_id="etl_report",
-    start_date=datetime(2024, 1, 1),
+    start_date=datetime(2026, 1, 1),
     schedule="@daily",
     catchup=False,
     default_args=DEFAULT_ARGS,
@@ -23,8 +23,7 @@ with DAG(
         task_id="load",
         bash_command=(
             "python /path/to/etl_project/loading/load_pipeline.py "
-            "--source file --file-path /data/input.jsonl --file-type jsonl "
-            "--table reporting_finance"
+            "--source file "
         ),
     )
 
@@ -32,7 +31,6 @@ with DAG(
         task_id="report",
         bash_command=(
             "python /path/to/etl_project/reporting/report_job.py "
-            "--report-name finance_report --output-format excel"
         ),
     )
 

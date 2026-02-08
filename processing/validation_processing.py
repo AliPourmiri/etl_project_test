@@ -5,9 +5,9 @@ Includes schema validation, data quality checks, and basic transformations.
 from typing import Any, Dict, Tuple, Type
 import json
 
-from base import ETlBase
+from base import ETLBase
 
-class ValidationProcessing(ETlBase):
+class ValidationProcessing(ETLBase):
     # Fixed schema and types for simplicity.
     REQUIRED_FIELDS = ["id", "amount", "currency"]
     TYPE_MAP: Dict[str, Type[Any]] = {"id": int, "amount": float, "currency": str}

@@ -146,7 +146,7 @@ class ETLBase:
         with self.dbcxn.cursor() as cur:
             cur.execute(query)
             rows = cur.fetchall()
-            assert rows.count <= 1, f"Multiple resource configs found for job {self.name()}"
+            assert rows.count() <= 1, f"Multiple resource configs found for job {self.name()}"
             return rows[0] if rows else None   
 
     # -------------------------

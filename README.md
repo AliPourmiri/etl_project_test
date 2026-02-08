@@ -134,14 +134,13 @@ with DAG("etl_report", start_date=datetime(2024, 1, 1), schedule="@daily", catch
         task_id="load",
         bash_command=(
             "python /path/to/etl_project/loading/load_pipeline.py "
-            "--name load_job"
         ),
     )
     report_task = BashOperator(
         task_id="report",
         bash_command=(
             "python /path/to/etl_project/reporting/report_job.py "
-            "--name report_job"
+            
         ),
     )
 
