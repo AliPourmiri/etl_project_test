@@ -7,13 +7,17 @@ import json
 
 from base import ETLBase
 
-class ValidationProcessing(ETLBase):
+class ValidationProcessing:
     # Fixed schema and types for simplicity.
     REQUIRED_FIELDS = ["id", "amount", "currency"]
     TYPE_MAP: Dict[str, Type[Any]] = {"id": int, "amount": float, "currency": str}
     MAX_ERRORS = 5
     # Simple referential set for demonstration.
     VALID_CURRENCIES = {"USD", "EUR", "GBP"}
+
+    def __init__(log, cxn):      # this allows to have logging and database connection for referential check
+        self.log = log
+        self.dbCxn = cxn
 
     def validate(self, records: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
         # Validate a list of records, apply transformations, and return valid rows.
