@@ -1,6 +1,6 @@
 **High-Level Design View (1–4)**
 1. Data Ingestion
-- Pluggable adapters read from files or Kafka (prototype scope).
+- Pluggable adapters read from files or Kafka or S3 (prototype scope).
 - Each adapter returns a list of dictionaries.
 
 2. Validation, Quality Checks & Transformation
