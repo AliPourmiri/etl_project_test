@@ -84,11 +84,11 @@ dags/
 We can also have a tranfer_file.py responsible for moving files from a given resource to a given target with more flexibity in source/target and file types.
 
 **Key Components**
-- `ETlBase` (`base/base.py`): shared logger, UTC timestamps, default DB connection, retries, and CLI helpers.
+- `ETlBase` (`base/base.py`): shared logger, date, default DB connection, retries, and CLI helpers.
 - Ingestion:
   - `FileIngestion`: CSV, JSON.
   - `KafkaIngestion`: Kafka consumer.
-  - `S3Ingestion`: JSON/JSONL reader from S3.
+  - `S3Ingestion`: JSON reader from S3.
 - Processing:
   - `ValidationProcessing`: schema checks, data quality checks, and transformations.
 - Loading:
@@ -97,9 +97,9 @@ We can also have a tranfer_file.py responsible for moving files from a given res
   - `ReportJob`: reads from DB → report generation → S3 upload.
 
 **What’s Implemented vs. Prompt**
-Implementation gives a high level idea of the potentiaol classes, object and interfaces:
+Implementation gives a high-level idea of the potential classes, objects, and interfaces:
 - Multi-source ingestion (file, Kafka, s3).
-- Validation checks (schema, duplicates, missing values,).
+- Validation checks (schema, duplicates, missing values).
 - Loading to DB.
 - Report generation CSV/XLSX.
 - CLI for report job.
