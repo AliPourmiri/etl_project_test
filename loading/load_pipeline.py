@@ -79,7 +79,7 @@ class DBLoadPipeline(ETLBase):
         # Run ingestion -> validation -> loading and return loaded count.
         if not self.options.table:
             raise ValueError("table is required for db loading")
-        self.log.info("db_load_pipeline_start ts=%s", self.now_utc())
+        self.log.info("db_load_pipeline_start ts=%s", self.options.date)
         ingestion = self._build_ingestion()
         validator = self._build_validation()
         records = ingestion.read()
@@ -89,7 +89,7 @@ class DBLoadPipeline(ETLBase):
         for rec in valid_records:
             self.ddCxn.curor().execute(f"Insert to table values {rec}")  # simple query to check DB connection
             count += 1
-        self.log.info("db_load_pipeline_end loaded=%s ts=%s", count, self.now_utc())
+        self.log.info("db_load_pipeline_end loaded=%s ts=%s", count, self.options.date())
         
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ The implementation is intentionally lightweight but designed to be extensible vi
 
 Example CLI (report job):
 ```
-python reporting/report_job.py --name report_job
+python reporting/report_job.py --output-format excel
 ```
 Note: Most configuration is resolved from the resource table keyed by `job_name`. CLI arguments are kept minimal for runtime overrides only.
 
@@ -57,32 +57,36 @@ Note: Most configuration is resolved from the resource table keyed by `job_name`
 ```
 
 **Design Patterns Used**
-- Adapter / Strategy: Each ingestion or loading backend is an interchangeable class with the same interface (`read()` or `load()`).
+- Adapter / Strategy: Each ingestion or loading backend is an interchangeable class with the same interface (`read()`) returning a generator.
 - Pipeline: Composable stages (ingest → validate → load / report).
-- Configuration Composition: Shared config mixins in `base/base.py` keep common settings consistent, with defaults populated from the resource table.
+- Configuration Composition: Shared config mixins in `base/base.py` keep common settings consistent, with defaults populated from the resource table. ETLBase has acces to a etl_resource table fetch required data for any type of ingestion/load/reporting
 
 **Project Structure**
 ```
 base/
   base.py                 # ETlBase (BaseStage) with logging, timestamps, DB connection
-ingestion/
-  file_ingestion.py       # CSV/JSON/JSONL ingestion
+                          # Retries mecahnism to execute (make sure the job is re-runable)
+ingestion/                
+  file_ingestion.py       # CSV/JSON ingestion
   kafka_ingestion.py      # Kafka consumer ingestion
-  s3_ingestion.py         # S3 JSON/JSONL ingestion
+  s3_ingestion.py         # S3 JSON ingestion
 processing/
-  validation_processing.py # Schema/type validation
+  validation_processing.py # Schema/type/duplication validation and transformation
 loading/
   load_pipeline.py        # DB loader + CLI pipeline
 reporting/
+  csv_report_writer.py    # Provide a excel formatted file and write data
+  excel_report_writer.py  # provide a csv formatted file and write data
   report_job.py           # Standalone report job (DB -> report -> S3)
 dags/
   etl_report_dag.py       # Airflow DAG to run load -> report
 ```
+We can also have a tranfer_file.py responsible for moving files from a given resource to a given target with more flexibity in source/target and file types.
 
 **Key Components**
 - `ETlBase` (`base/base.py`): shared logger, UTC timestamps, default DB connection, retries, and CLI helpers.
 - Ingestion:
-  - `FileIngestion`: CSV, JSON, JSONL/NDJSON.
+  - `FileIngestion`: CSV, JSON.
   - `KafkaIngestion`: Kafka consumer.
   - `S3Ingestion`: JSON/JSONL reader from S3.
 - Processing:
@@ -93,35 +97,24 @@ dags/
   - `ReportJob`: reads from DB → report generation → S3 upload.
 
 **What’s Implemented vs. Prompt**
-Implemented:
-- Multi-source ingestion (file, Kafka).
-- Validation checks (schema, duplicates, missing values, referential checks).
+Implementation gives a high level idea of the potentiaol classes, object and interfaces:
+- Multi-source ingestion (file, Kafka, s3).
+- Validation checks (schema, duplicates, missing values,).
 - Loading to DB.
 - Report generation CSV/XLSX.
 - CLI for report job.
 
-Not fully implemented (by design, minimal scope):
-- XML/XLSX ingestion and XML/JSON report output.
-- Advanced data quality checks (dedupe, referential integrity).
-- Transformation/enrichment rules.
-- Templated report layouts.
-- Raw/processed storage separation (can be added with extra loaders).
+
 
 **How to Run**
 Report job (DB → report → S3):
 ```
-python reporting/report_job.py --name report_job
+python loading/load_pipline.py --resource kafka
+python reporting/report_job.py --output-format excel
 ```
 
-**Scheduling (Cron and Airflow)**
+**Scheduling (Airflow)**
 Dependency: run the load pipeline first, then run the report job.
-
-Cron example (Linux):
-```
-# Load at 01:00, then report at 01:15
-0 1 * * * /usr/bin/python /path/to/etl_project/loading/load_pipeline.py --name load_job
-15 1 * * * /usr/bin/python /path/to/etl_project/reporting/report_job.py --name report_job
-```
 
 Airflow example (simple DAG with dependency):
 ```
@@ -129,11 +122,11 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime
 
-with DAG("etl_report", start_date=datetime(2024, 1, 1), schedule="@daily", catchup=False) as dag:
+with DAG("etl_report", start_date=datetime(2026, 1, 1), schedule="@daily", catchup=False) as dag:
     load_task = BashOperator(
         task_id="load",
         bash_command=(
-            "python /path/to/etl_project/loading/load_pipeline.py "
+            "python /path/to/etl_project/loading/load_pipeline.py --resource kafka "
         ),
     )
     report_task = BashOperator(
@@ -167,16 +160,16 @@ You can copy this file into your Airflow `dags/` folder and adjust paths as need
 All classes are extended from `ETlBase` class defined in `base.py`. This class provides methods and attributes that can be used for a configurable ETL process.
 It provides the following features:
 1. Logging: consistent with the job name with different `log_level` settings.
-2. Retries mechanism: the `selfrun()` flow is decorated with a retry mechanism.
+2. Retries mechanism: the `run()` flow is decorated with a retry mechanism.
 3. Resource discovery: configuration details for ingestion/loading/reporting are retrieved from a predefined resource table where job name is the primary key. The table must be set up before triggering a job.
-4. Parsing arguments: it provides shared CLI helpers (`add_base_options`, `build_parser`) used for small runtime overrides.
-5. Common attributes: date, timestamps, DB connections, etc.
+4. Parsing arguments: it provides shared CLI helpers (`add_options`, `build_parser`) used for small runtime overrides.
+5. Common attributes: date, DB connections, etc.
 
 Besides the base class:
 - Ingestion classes: each ingestion contains a dataclass responsible for configuration, then a main ingestion class responsible for reading data from sources.
 
 **Resource Table Schema (Example)**
-The base class exposes `resource_config()` to fetch a row by `job_name` from a predefined table (default `resource`, overridable via `RESOURCE_TABLE`).
+The base class exposes `resource_discovery()` to fetch a row by `job_name` from a predefined table (default `resource`, overridable via `RESOURCE_TABLE`).
 Example schema (PostgreSQL):
 ```
 create table resource (

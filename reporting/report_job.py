@@ -39,7 +39,7 @@ class ReportJob(ETlBase):
             raise RuntimeError("psycopg is required for database access") from exc
 
     def _output_path(self) -> str:
-        ext = "csv" if self.cfg.output_format == "csv" else "xlsx"
+        ext = "csv" if self.options.output_format == "csv" else "xlsx"
         return os.path.join(self.source.outpt_path, f"{self.source.report_name}.{ext}")
 
     def _s3_key(self, output_path: str) -> str:
@@ -47,7 +47,7 @@ class ReportJob(ETlBase):
         return f"{self.source.s3_key}/{filename}"
 
     def _writer(self):
-        fmt = self.cfg.output_format.lower()
+        fmt = self.options.output_format.lower()
         if fmt == "csv":
             return CsvReportWriter()
         if fmt in {"excel", "xlsx"}:
@@ -66,13 +66,13 @@ class ReportJob(ETlBase):
             s3.put_object(Bucket=self.source.s3_bucket, Key=self._s3_key(output_path), Body=f.read())
 
     def handle_job(self) -> int:
-        self.log.info("report_job_start ts=%s", self.now_utc())
+        self.log.info("report_job_start ts=%s",self.options.date)
         rows = list(self._fetch_rows())
         writer = self._writer()
         output_path = self._output_path()
         count = writer.write(output_path, rows)
         self._upload_to_s3()
-        self.log.info("report_job_end rows=%s ts=%s", count, self.now_utc())
+        self.log.info("report_job_end rows=%s ts=%s", count, self.options.date)
         return count
 
 
