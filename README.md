@@ -1,7 +1,7 @@
 **High-Level Design View (1–4)**
 1. Data Ingestion
 - Pluggable adapters read from files or Kafka or S3 (prototype scope).
-- Each adapter returns a list of dictionaries.
+- Each adapter returns a list of dictionaries as a generator.
 
 2. Validation, Quality Checks & Transformation
 - A processing stage validates required fields and types.
@@ -13,7 +13,7 @@
 
 4. Reporting Module
 - Reports are generated from SQL queries against a predefined table.
-- Output format is selected by job settings (CSV or Excel). XML is not generated in this prototype.
+- Output format is selected by job settings (CSV or Excel).
 
 **Overview**
 This repo provides a modular ETL-style pipeline that:
