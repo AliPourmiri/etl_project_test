@@ -72,12 +72,12 @@ class DBLoadPipeline(ETLBase):
 
     def _build_validation(self) -> ValidationProcessing:
         # Instantiate validation stage.
-        return ValidationProcessing()
+        return ValidationProcessing(self.log, self.dbcxn)
 
 
     def handle_job(self) -> int:
         # Run ingestion -> validation -> loading and return loaded count.
-        if not self.options.table:
+        if not self.resource.table:
             raise ValueError("table is required for db loading")
         self.log.info("db_load_pipeline_start ts=%s", self.options.date)
         ingestion = self._build_ingestion()
@@ -87,7 +87,7 @@ class DBLoadPipeline(ETLBase):
         # Load into database, it can be more efficient.
         count = 0
         for rec in valid_records:
-            self.ddCxn.curor().execute(f"Insert to table values {rec}")  # simple query to check DB connection
+            self.dbCxn.curor().execute(f"Insert to table values {rec}")  # simple query to check DB connection
             count += 1
         self.log.info("db_load_pipeline_end loaded=%s ts=%s", count, self.options.date())
         
