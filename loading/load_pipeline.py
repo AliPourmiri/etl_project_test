@@ -1,5 +1,5 @@
 """
-Database loading stage using BaseStage (PostgreSQL via psycopg).
+Database loading stage using ETLBase (PostgreSQL via psycopg).
 Inserts rows into a table.
 Includes a CLI that runs ingestion -> validation -> load.
 """
@@ -25,7 +25,7 @@ from processing import ValidationProcessing
 class DBLoadPipeline(ETLBase):
         
     def name(self) -> str:
-        return "db_load_pipeline.py"
+        return "load_pipeline.py"
     
     def add_options(p: argparse.ArgumentParser) -> None:
     # Ingestion
