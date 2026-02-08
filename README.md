@@ -109,8 +109,8 @@ Implementation gives a high-level idea of the potential classes, objects, and in
 **How to Run**
 Report job (DB → report → S3):
 ```
-python loading/load_pipline.py --resource kafka
-python reporting/report_job.py --output-format excel
+python loading/load_pipline.py --date 2026-02-09 --resource kafka  
+python reporting/report_job.py --date 2026-02-09 --output-format excel
 ```
 
 **Scheduling (Airflow)**
