@@ -195,5 +195,7 @@ create table resource (
 ```
 Add or remove columns as needed for your ingestion/loading/reporting configuration.
 
+The resource table is a simplistic design; the table can be normalized with a more complex design, foreign keys.  
+
 **Notes**
 The implementation emphasizes clarity and extensibility. All stages use `ETlBase` for consistent logging, timestamps, and DB connectivity.
