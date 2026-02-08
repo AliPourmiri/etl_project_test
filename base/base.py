@@ -45,7 +45,7 @@ class ETLBase:
 
         self._init_logging()
         self._init_args()
-        self.source = self._init_resource()
+        self.resource = self._init_resource()
 
     # -------------------------
     # Naming
