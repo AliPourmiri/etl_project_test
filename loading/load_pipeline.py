@@ -87,7 +87,7 @@ class DBLoadPipeline(ETLBase):
         # Load into database, it can be more efficient.
         count = 0
         for rec in valid_records:
-            self.dbCxn.curor().execute(f"Insert to table values {rec}")  # simple query to check DB connection
+            self.dbCxn.curor().execute(f"Insert to table values {rec}")  # simple query to insert data DB (can be optimised for large data sey)
             count += 1
         self.log.info("db_load_pipeline_end loaded=%s ts=%s", count, self.options.date())
         
