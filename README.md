@@ -30,7 +30,7 @@ python loading/load_pipelne.py --date 2026-02-09 --source kakfa
 ```
 Note: Most configuration is resolved from the resource table keyed by `job_name`. CLI arguments are kept minimal for runtime overrides only.
 
-Script load_pipeline.py  will give an overview of the pipeline  that is modular and configurable. 
+Script load_pipeline.py  will give an overview of the pipeline  that is modular and configurable. Note that ETLBase class is fetching configuration data from a resource table and stores in self.resource to be used by the script based on ingestion type.
 
 **Architecture Diagram (Logical)**
 ```
