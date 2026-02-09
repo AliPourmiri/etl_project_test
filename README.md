@@ -171,10 +171,10 @@ Besides the base class:
 - Ingestion classes: each ingestion contains a dataclass responsible for configuration, then a main ingestion class responsible for reading data from sources.
 
 **Resource Table Schema (Example)**
-The base class exposes `resource_discovery()` to fetch a row by `job_name` from a predefined table (default `resource`, overridable via `RESOURCE_TABLE`).
+The base class exposes `resource_discovery()` to fetch a row by `job_name` from a predefined table `etl_resources`.
 Example schema (PostgreSQL):
 ```
-create table resource (
+create table etl_resources (
   job_name text primary key,
   file_path text,
   file_type text,
