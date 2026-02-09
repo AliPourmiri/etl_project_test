@@ -26,9 +26,11 @@ The implementation is intentionally lightweight but designed to be extensible vi
 
 Example CLI (report job):
 ```
-python reporting/report_job.py --output-format excel
+python loading/load_pipelne.py --date 2026-02-09 --source kakfa
 ```
 Note: Most configuration is resolved from the resource table keyed by `job_name`. CLI arguments are kept minimal for runtime overrides only.
+
+Script load_pipeline.py  will give an overview of the pipeline  that is modular and configurable. 
 
 **Architecture Diagram (Logical)**
 ```
@@ -65,7 +67,7 @@ Note: Most configuration is resolved from the resource table keyed by `job_name`
 ```
 base/
   base.py                 # ETlBase (BaseStage) with logging, timestamps, DB connection
-                          # Retries mecahnism to execute (make sure the job is re-runable)
+                          # Retries mechanism to execute (make sure the job is re-runable)
 ingestion/                
   file_ingestion.py       # CSV/JSON ingestion
   kafka_ingestion.py      # Kafka consumer ingestion
